@@ -1,0 +1,157 @@
+---
+title: "Introduction to MDAnalysis"
+author: "Tugba Ozturk"
+date: "July 2, 2018"
+output: 
+  slidy_presentation:
+    duration: 45 #to add a timer
+    footer: "by Tugba Ozturk, MSc."
+    theme: united
+    
+---
+```{bash, echo=FALSE}
+source activate mdaenv
+```
+
+
+```{r setup, include=FALSE}
+library(knitr)
+library(reticulate)
+opts_chunk$set('python', engine.path = '/usr/bin/python3')
+knitr::knit_engines$set(python = reticulate::eng_python)
+```
+
+
+# Introduction to MDAnalysis 
+
+
+- **MDAnalysis** is an object-oriented Python package to analyze Molecular Dynamics (MD) simulation trajectories. 
+- The atomic coordinates can be accessed through NumPy arrays.
+- Data can be read or written in the pdb and dcd formats.
+- CHARMM-like atom selection syntax makes it easier to learn for those who are used to VMD.
+
+
+# Introduction to MDAnalysis
+
+- Please visit <https://www.mdanalysis.org> for its installation guide and documentation. 
+- *MDAnalysis: A Toolkit for the Analysis of Molecular Dynamics Simulations* (DOI: 10.1002/jcc.21787) explains the structure of the code in detail.
+
+# Outline
+In this workshop, we will learn how to:
+
+- load a structure or a MD trajectory;
+- select parts of your system;
+- work with atoms, residues and molecules through the object-oriented interface of MDAnalysis;
+- analyze MD trajectories;
+- write out modified trajectories;
+- use algorithms in the MDAnalysis.analysis module (intermediate level of difficulty).
+
+# Loading a structure and its trajectory:
+- First, we need to import MDAnalysis and NumPy packages.
+- Then, we will specify the structure file (either pdb or psf) and its trajectory file (dcd) with their proper pathways.
+- Finally, we will build the *AtomGroup* of our molecular system by loading a topology and a trajectory into the central data structure, the *Universe* object:
+```{python, engine.path = '/usr/bin/python3', cache=FALSE, echo = TRUE, eval = TRUE}
+import MDAnalysis
+import numpy as np
+PSF = "Example/structure.psf" 
+DCD = "Example/trajectory.dcd"
+p = MDAnalysis.Universe(PSF,DCD)
+print(p.atoms)
+```
+Note that MDAnalysis is object oriented. Molecular systems consist of *Atom* objects, which are grouped in *AtomGroup* instances are built as the *Universe* objects.
+
+# Handling a molecular system
+Once we have the *Universe()* object, we can select atoms using a CHARMM-like syntax.
+But, before doing that, let's check the following:
+
+- the number of atoms;
+- the list of atoms;
+- the first 5 atoms;
+- the list of segments in the system;
+- the list of residues involving the given atom indices. 
+
+```{python, engine.path = '/usr/bin/python3'}
+print(p)
+print(p.atoms)
+list(p.atoms[:5])
+list(p.atoms.segments)
+list(p.atoms[430:450])
+```
+
+
+# Handling a molecular system
+From smaller to larger, organizational units can be listed as *Atom*, *Residue*, and *Segment*. Similarly, each higher level organizational unit also knows about the smaller ones. In other words, each *Residue* has *Atoms*.
+
+```{python, engine.path = '/usr/bin/python3'}
+sel = p.atoms[430:450].residues
+sel.atoms
+```
+
+# Exercise
+1. Print out the residue (*resname*) of the last atom in the selection previously defined as `sel`.
+2. What does the following expression return? Why?
+```{python, engine.path = '/usr/bin/python3'}
+len(p.atoms[430:450]) == len(p.atoms[430:450].residues.atoms) 
+```
+3. How many residues are in the *Universe* `p`? How do you get a list of the residue names (such as ["Ala", "Gly", "Gly", "Asp", ...]) and residue numbers (*resid*) for atoms 430 to 450? And as a list of tuples (resname, resid)? *Hint:* You can search for **zip** function.
+
+4. How many segments are there? What is the segment identifier of the first *Segment*?
+
+
+# Exercise (Solutions)
+1. Print out the residue (*resname*) of the last atom in the selection previously defined as `sel`.
+```{python, engine.path = '/usr/bin/python3'}
+sel.atoms[-1]
+```
+
+2. What does the following expression return? Why?
+```{python, engine.path = '/usr/bin/python3'}
+len(p.atoms[430:450]) == len(p.atoms[430:450].residues.atoms)
+```
+It returns `FALSE` since the length of the atoms is not equal to the length of the complete residues. The complete residues have more atoms than the arbitrary slice of atoms.
+
+# Exercise (Solutions)
+3. How many residues are in the *Universe* `p`?  How do you get a list of the residue names (such as ["Ala", "Gly", "Gly", "Asp", ...]) and residue numbers (*resid*) for atoms 430 to 450? And as a list of tuples (resname, resid)? *Hint:* You can search for **zip** function.
+```{python, engine.path = '/usr/bin/python3'}
+len(p.residues)
+resnames = p.atoms[430:450].residues.resnames
+resids = p.atoms[430:450].residues.resids
+list(zip(resnames, resids))
+```
+```{python, engine.path = '/usr/bin/python3', echo=FALSE}
+nres=len(p.residues)                                        
+``` 
+There are `r py$nres` residues in the given system.
+
+4. How many segments are there? What is the segment identifier of the first *Segment*?
+```{python, engine.path = '/usr/bin/python3'}
+len(p.segments)
+segnames = p.segments
+si = segnames[0].segid
+```
+```{python, engine.path = '/usr/bin/python3', echo=FALSE}
+nseg=len(p.segments)
+```
+There are `r py$nseg` segments in the given system. The segment identifier (*segid*) of the first *Segment* is `r as.character(py$si)`. Note that `len(p.segments)`, `len(p.atoms.segments)` and `p.atoms.n_segments` are interchangeable.
+
+# Selections
+- The `select_atoms` method of an *AtomGroup* or a *Universe* returns an *AtomGroup* and the selections are alwaus sorted according to their index in the topology file. 
+```{python, engine.path = '/usr/bin/python3'}
+p.select_atoms("segid PROA")
+```
+This selects all the protein atoms.
+
+- The following keywords are understood by the selection parser:
+  - protein, backbone, nucleic, nucleicbackbone
+  - segid *seg-name*
+  - resid *residue-number-or-range*
+  - resname *3-letter aa code*
+  - name *atom name*
+  - atom *seg-name residue-number atom-name*
+
+
+# Selections
+
+
+
+
