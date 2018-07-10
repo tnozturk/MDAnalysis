@@ -7,12 +7,7 @@ output:
     duration: 45 #to add a timer
     footer: "by Tugba Ozturk, MSc."
     theme: united
-    
 ---
-```{bash, echo=FALSE}
-source activate mdaenv
-```
-
 
 ```{r setup, include=FALSE}
 library(knitr)
@@ -29,7 +24,7 @@ knitr::knit_engines$set(python = reticulate::eng_python)
 - The atomic coordinates can be accessed through NumPy arrays.
 - Data can be read or written in the pdb and dcd formats.
 - CHARMM-like atom selection syntax makes it easier to learn for those who are used to VMD.
-
+- This tutorial is prepared using the original MDAnalysis Tutorial which can be found at <https://www.mdanalysis.org/MDAnalysisTutorial>.
 
 # Introduction to MDAnalysis
 
@@ -80,6 +75,7 @@ list(p.atoms[430:450])
 
 
 # Handling a molecular system
+
 From smaller to larger, organizational units can be listed as *Atom*, *Residue*, and *Segment*. Similarly, each higher level organizational unit also knows about the smaller ones. In other words, each *Residue* has *Atoms*.
 
 ```{python, engine.path = '/usr/bin/python3'}
@@ -88,6 +84,7 @@ sel.atoms
 ```
 
 # Exercise
+
 1. Print out the residue (*resname*) of the last atom in the selection previously defined as `sel`.
 2. What does the following expression return? Why?
 ```{python, engine.path = '/usr/bin/python3'}
@@ -99,6 +96,7 @@ len(p.atoms[430:450]) == len(p.atoms[430:450].residues.atoms)
 
 
 # Exercise (Solutions)
+
 1. Print out the residue (*resname*) of the last atom in the selection previously defined as `sel`.
 ```{python, engine.path = '/usr/bin/python3'}
 sel.atoms[-1]
@@ -111,6 +109,7 @@ len(p.atoms[430:450]) == len(p.atoms[430:450].residues.atoms)
 It returns `FALSE` since the length of the atoms is not equal to the length of the complete residues. The complete residues have more atoms than the arbitrary slice of atoms.
 
 # Exercise (Solutions)
+
 3. How many residues are in the *Universe* `p`?  How do you get a list of the residue names (such as ["Ala", "Gly", "Gly", "Asp", ...]) and residue numbers (*resid*) for atoms 430 to 450? And as a list of tuples (resname, resid)? *Hint:* You can search for **zip** function.
 ```{python, engine.path = '/usr/bin/python3'}
 len(p.residues)
@@ -135,6 +134,7 @@ nseg=len(p.segments)
 There are `r py$nseg` segments in the given system. The segment identifier (*segid*) of the first *Segment* is `r as.character(py$si)`. Note that `len(p.segments)`, `len(p.atoms.segments)` and `p.atoms.n_segments` are interchangeable.
 
 # Selections
+
 - The `select_atoms` method of an *AtomGroup* or a *Universe* returns an *AtomGroup* and the selections are alwaus sorted according to their index in the topology file. 
 ```{python, engine.path = '/usr/bin/python3'}
 p.select_atoms("segid PROA")
@@ -142,16 +142,314 @@ p.select_atoms("segid PROA")
 This selects all the protein atoms.
 
 - The following keywords are understood by the selection parser:
-  - protein, backbone, nucleic, nucleicbackbone
-  - segid *seg-name*
-  - resid *residue-number-or-range*
-  - resname *3-letter aa code*
-  - name *atom name*
-  - atom *seg-name residue-number atom-name*
+  - protein, backbone, nucleic, nucleicbackbone (example: `p.select_atoms("protein")`)
+  - segid *seg-name* (example:`p.select_atoms("segid MEMB")`)
+  - resid *residue-number-or-range* (example:`p.select_atoms("resid 13")`)
+  - resname *3-letter aa code* (example:`p.select_atoms("resname ALA")`)
+  - name *atom name* (example:`p.select_atoms("name CLA")`)
+  - atom *seg-name residue-number atom-name* (example:`p.select_atoms("atom PROA 421 CA")`)
 
 
 # Selections
 
+- Even tough the following selection works: `select_atoms("atom PROA 421 CA")`, we can select the same atom using VMD-like selection syntax: `select_atoms("segid PROA and resid 421 and name CA")`. 
+- We can group subselections using parantheses. For example, `select_atoms("segid PROA and not (resname GL*)")` selects all the atoms of the protein's *PROA* segment except the ones from the residues GLN, GLU and GLY.
+- We can also use *Selection exporters* to expert selections for another software package such as VMD:
+
+`sel1=p.select_atoms("protein")`
+
+`sel1.write("selections.vmd",name="my_protein")`
+
+Then, in VMD, we need to source the Tcl secript named *selections.vmd*:
+
+`source selections.vmd`
+
+`set sel [atomselect top my_protein]`
+
+For more information, please visit <https://www.mdanalysis.org/docs/documentation_pages/selections/vmd.html>.
+
+- MDAnalysis atom selection keywords are case sensitive. This is why `select_atoms("segid PROA and resid 421 and name Ca")` returns nothing. 
+- Boolean keywords (`and`, `or` and `not`) also work.
+
+# Exercise
+- Choose all atoms except N belong to the residues 424-434 and print the number of residues and atoms in the selection.
 
 
+# Exercise (Solution)
 
+- Choose all atoms except N belong to the residues 424-434 and print the number of residues and atoms in the selection.
+
+```{python, engine.path = '/usr/bin/python3'}
+k=p.select_atoms("protein and resid 424-434 and not name N*")
+print(k.n_atoms)
+print(k.n_residues)
+```
+
+Note that range selections work in the following way: `resid 424-427 430 437-444`.
+
+
+# Selections 
+
+The following **geometric** selections are handy:
+
+  - around distance selection (example:`around 4.0 protein` selects all atoms not belonging to protein that are within 4.0 angstroms from the protein.)
+  - sphlayer R_inner R_outer selection (example: `sphlayer 2.5 4.5 (protein and resid 440 and (name OE1 or name OE2 ))` selects all atoms within a spherical layer centered in the geometric center of a given selection. Here, R_inner and R_outer represent inner and outer radius of the spherical layer.)
+  - sphzone radius selection (example: `sphzone 4.0 (protein and resid 440)` selects all atoms within a spherical zone centered in the geometrical center of the given selection of radius 4.0 angstroms.)
+  - cylayer R_inner R_outer Z_max Z_min selection (example:`cylayer 4 6 10 -10 protein` selects all atoms within a cylindrical layer centered in the geometric center of a given selection. Here, the center of the cylinder is the center of geometry of protein. It has the inner raidus of 4 angstroms and the outer radius of 6 angstroms. Along z, the cylinder entends from 10 angstroms above the geometric center of protein to -10 angstroms below.)
+  - cyzone R_outer Z_max Z_min selection (example:`cyzone 6 10 2 protein` works similarly. It selects all atoms within a cylindrical zone centered in the geometric center of the selection with a radius of 6.0 angstroms. In the z direction, it extends from 10 angstrom above the geometric center to 2 angstrom below.)
+  
+# Selections
+ 
+ - point x y z distance (example:`point 2 2 1 4.0` selects all atoms within 4.0 angstroms of the coordinate (2.0,2.0,1.0).)
+ - prop [abs] propertry-operator-value (example:`prop z >= 10` selects all atomz with z coordinate greater than 5.0 while `prop abs z >= 10` selects all atoms within -10.0 <= z <= 10.0.)
+
+# Similarity and index-based selections
+
+ - same *subkeyword* as *selection*: to select all atoms having the same *subkeyword* value as any atom in the given *selection*. `name`, `type`, `resname`, `resid`, `segid`, `mass`, `charge`, `radius`, `resnum`, `bfactor` are the allowed subkeywords.
+ - byres *selection*: to select all atoms in the same segment and the residue as *selection*. In other words, `byres selection` = `same residue as selection`.
+ - bynum *index-range*: to select all atoms within a range of indices. MDAnalysis uses 1-based indices unlike VMD. `bynum 1:6` selects atoms 1 through 6 inclusive. 
+ - MDAnalysis selects atoms from an *AtomGroup* selection by default. Prefixing a selection term with `global` keyword allows the selection to be chosen from the *Universe*.
+
+```{python, engine.path = '/usr/bin/python3'}
+lipids=p.select_atoms("segid MEMB")
+lippro=lipids.select_atoms("around 4 global protein")
+print(lippro.atoms)
+```
+If we try `lipids.select_atoms("around 4 protein")`, nothing would be returned since in the lipids group, there are not any protein atoms.
+
+
+# Dynamic Selections
+
+- By default `select_atoms()` returns an *AtomGroup*, in which the list of atoms is constant across trajectory frame changes. If the argument `updating` is set to `True`,an `UpdatingAtomGroup` instance will be returned whose selection expressions are re-evaluated every time the trajectory frame changes:
+
+```{python, engine.path = '/usr/bin/python3'}
+lipids=p.select_atoms("segid MEMB")
+lippro=lipids.select_atoms("around 3.5 global protein",updating=True)
+lippro.n_atoms
+p.trajectory.next()
+lippro.n_atoms
+```
+
+
+# Ordered selections
+- When calculating the dihedral angles, the order of the atoms is crucial. By default, `seect_atoms()` returns a sorted atom list by atom index to avoid possible duplicates in the selection. But, if the ordering of atoms is important or duplicate atoms are needed for a calculation, multiple *AtomGroups* should be concatenated. using the `+` operator:
+
+```{python, engine.path = '/usr/bin/python3'}
+ordered=p.select_atoms("segid MEMB and resid 5 and name P") + p.select_atoms("segid MEMB and resid 3 and name P")
+print(list(ordered))
+```
+
+- MDAnalysis also does the concatenation automatically if multiple selections are provided inside the *select_atoms()* such as `p.select_atoms("segid MEMB and resid 5 and name P","segid MEMB and resid 3 and name P")`.
+
+
+# Exercise
+
+1. Select a range of resids 425 to 445 with a selection. List the residue numbers.
+
+2. How many residues do not containt a beta carbon? Select all of them and figure out the residue names in that selection.
+
+# Exercise (Solutions)
+
+1. Select a range of resids 425 to 445 with a selection. List the residue numbers.
+
+```{python, engine.path = '/usr/bin/python3'}
+sel=p.select_atoms("protein and resid 425-445")
+list(sel.atoms)[1:5]
+```
+
+
+2. How many residues do not containt a beta carbon? Select all of them and figure out the residue names in that selection.
+
+```{python, engine.path = '/usr/bin/python3'}
+nocb=p.select_atoms("protein and (byres name CA) and not (byres name CB)")
+print(list(nocb.residues))
+print(nocb.n_residues)
+```
+These should be all Glycines. Let's double-check if these are all Glycines:
+
+```{python, engine.path = '/usr/bin/python3'}
+len(list(nocb.residues)) == len(list(p.select_atoms("resname GLY").residues))
+```
+
+# Handling the AtomGroups
+An *AtomGroup* has a lot of methods and attributes providing information about the atoms such as the names, indices and coordinates. These methods return numpy arrays which is the whole purpose of using MDAnalysis.
+
+```{python, engine.path = '/usr/bin/python3'}
+CA = p.select_atoms("protein and name CA")
+r = CA.positions
+r.shape
+```
+
+Note that a variable stored in an instance is called an *attribute* whereas a function stored in an instance is called a *method*.  Other quantities that can be easily calculated for an *AtomGroup* are as follows:
+ - center_of_mass() and center_of_geometry();
+ - total_mass() and total_charge();
+ - radius_of_gyration();
+ - principal_axes() using the moment_of_inertia().
+
+More information can be found at <https://www.mdanalysis.org/docs/documentation_pages/core/universe.html>.
+
+
+# Exercise
+
+- ProP example has two helices and a loop:  residues 418-438 form the transmembrane helix, residues 440-450 form a loop and residues 453 to 495 form another alpha helix which partially interacts with the membrane surface. Let'scalculate the center of mass and the center of geometry for each of them.
+
+- What are the distances between the center of mass?
+
+- Calculate the angle between the center of geometries of the transmembrane helix, loop and alpha helix. 
+
+
+# Exercise (Solutions)
+
+- ProP example has two helices and a loop:  residues 418-438 form the transmembrane helix, residues 440-450 form a loop and residues 453 to 495 form another alpha helix which partially interacts with the membrane surface. Let'scalculate the center of mass and the center of geometry for each of them.
+
+```{python, engine.path = '/usr/bin/python3'}
+domains={'tm':p.select_atoms("protein and resid 418-438"),
+'loop':p.select_atoms("protein and resid 440-450"),
+'ah':p.select_atoms("protein and resid 453-495")}
+cog=dict((name,dom.centroid()) for name,dom in domains.items())
+com=dict((name,dom.center_of_mass()) for name,dom in domains.items())
+print(cog)
+print(com)
+```
+
+# Exercise (Solutions)
+
+- What are the distances between their centers of mass?
+```{python, engine.path = '/usr/bin/python3'}
+from numpy.linalg import norm
+print(norm(com['tm']-com['loop']))
+print(norm(com['loop']-com['ah']))
+print(norm(com['tm']-com['ah']))
+```
+
+# Exercise (Solutions)
+
+- Calculate the angle between the center of geometries of the transmembrane helix, loop and alpha helix. 
+
+If point A, B and C are the centers of mass of alpha helix, loop and transmembrane helix, respectively, we need to calculate the angle between BA and BC vectors. Using the definition of scalar product, we can calculate the angle as follows:
+$$\theta=arccos(\frac{\vec{BA}.\vec{BC}}{|\vec{BA}||\vec{BC}|})$$
+
+```{python, engine.path = '/usr/bin/python3'}
+import numpy as np
+from numpy.linalg import norm
+A=cog['ah']
+B=cog['loop']
+C=cog['tm']
+BA=B-A
+BC=B-C
+theta=np.rad2deg(np.arccos(np.dot(BA, BC)/(norm(BA)*norm(BC))))
+print(theta)
+```
+ 
+
+# Handling the AtomGroups
+
+We can write an *AtomGroup* to a file using the *write()* method:
+
+```{python, engine.path = '/usr/bin/python3', echo=TRUE, eval=FALSE}
+sel1=p.select_atoms("protein and name CA")
+sel1.write("alphacarbons.pdb")
+
+p.select_atoms("byres (name OH2 and around 4.0 protein)").write("hydration-shell.pdb")
+```
+
+# Trajectory Analysis
+
+So far we dealt with static data. The *Universe* object binds together the static topology and changing coordinate information stored in the trajectory. To access each frame in a trajectory, we need to iterate over the *Universe.trajectory* attribute:
+
+```{python, engine.path = '/usr/bin/python3', echo=TRUE, eval=FALSE}
+protein = p.select_atoms("protein")
+for f in p.trajectory:
+  print("Frame: {0:5d}, Time: {1:8.3f}".format(f.frame, p.trajectory.time))
+  print("Rgyr: {0:8.3f} A".format(protein.atoms.radius_of_gyration()))
+```
+
+
+Normally, we would collect the data in a list or array:
+```{python, engine.path = '/usr/bin/python3'}
+Rgyr = []
+protein = p.select_atoms("protein")
+
+for f in p.trajectory:
+   Rgyr.append((p.trajectory.time, protein.radius_of_gyration()))
+   
+Rgyr = np.array(Rgyr)
+```
+
+# Trajectory Analysis
+
+Then, we can plot the radius of gyration over time and save it as *Rgyr.pdf*:
+
+```{python, engine.path = '/usr/bin/python3'}
+import matplotlib.pyplot as plt
+ax = plt.subplot(111)
+ax.plot(Rgyr[:,0], Rgyr[:,1], '--', lw=2, label=r"$R_G$")
+ax.set_xlabel("time (ps)")
+ax.set_ylabel(r"radius of gyration $R_G$ ($\AA$)")
+ax.figure.savefig("Rgyr.png", dpi=500, transparent=True)
+plt.draw()
+plt.show()
+```
+
+# Trajectory Analysis
+
+Let's do one more example using the previously calculated angle, $\theta$. Normally, we would write the code for calculating this angle as a function:
+
+```{python, engine.path = '/usr/bin/python3'}
+A=p.select_atoms("protein and resid 418-438")
+B=p.select_atoms("protein and resid 440-450")
+C=p.select_atoms("protein and resid 453-495")
+def theta(A, B, C):
+    """Calculate the angle between BA and BC for AtomGroups A, B, C"""
+    BA = A.centroid() - B.centroid()
+    BC = C.centroid() - B.centroid()
+    theta = np.arccos(np.dot(BA, BC)/(norm(BA)*norm(BC)))
+    return np.rad2deg(theta)
+```
+
+Then, we can iterate through the frames, calculate this angle for each frame and save the result as a csv file:
+```{python, engine.path = '/usr/bin/python3'}
+data = np.array([(p.trajectory.time, theta(A,B,C)) for f in p.trajectory])
+time, theta = data.T
+np.savetxt("theta-time.csv", data, delimiter=",")
+```
+
+# Trajectory Analysis
+
+Let's plot it:
+```{python, engine.path = '/usr/bin/python3'}
+import matplotlib
+import matplotlib.pyplot as plt
+degreeFormatter = matplotlib.ticker.FormatStrFormatter(r"%g$^\circ$")
+plt.figure()
+ax = plt.subplot(111)
+ax.plot(time, theta, '-', lw=2)
+ax.set_xlabel("time (ps)")
+ax.set_ylabel(r"angle $\theta$")
+ax.yaxis.set_major_formatter(degreeFormatter)
+ax.figure.savefig("Theta.png", dpi=500, transparent=True)
+plt.draw()
+plt.show()
+```
+
+
+# Trajectory Analysis
+
+There are different ways of iterating through the frames:
+1. Using implicit for loops:
+  ```{python, engine.path = '/usr/bin/python3', eval=FALSE}
+  data = np.array([(p.trajectory.time, theta(A,B,C)) for f in p.trajectory])
+  ```
+  
+2. Using indexing syntax:
+  ```{python, engine.path = '/usr/bin/python3', eval=FALSE}
+  p.trajectory[49] 
+  ```
+
+3. Slicing:
+  ```{python, engine.path = '/usr/bin/python3', eval=FALSE}
+  for f in p.trajectory[9:-10:2]:
+    print(f.frame)
+    
+  ```
+It starts from the 10th frame and goes to the 10th frame before the end with the increment of 2 frames. For trajectory indexing and slicing, MDAnalysis uses 0-based indices as in standard Python.
