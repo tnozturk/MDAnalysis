@@ -232,7 +232,7 @@ lippro.n_atoms
 
 
 # Ordered selections
-- When calculating the dihedral angles, the order of the atoms is crucial. By default, `seect_atoms()` returns a sorted atom list by atom index to avoid possible duplicates in the selection. But, if the ordering of atoms is important or duplicate atoms are needed for a calculation, multiple *AtomGroups* should be concatenated. using the `+` operator:
+- When calculating the dihedral angles, the order of the atoms is crucial. By default, `select_atoms()` returns a sorted atom list by atom index to avoid possible duplicates in the selection. But, if the ordering of atoms is important or duplicate atoms are needed for a calculation, multiple *AtomGroups* should be concatenated. using the `+` operator:
 
 ```{python, engine.path = '/usr/bin/python3'}
 ordered=p.select_atoms("segid MEMB and resid 5 and name P") + p.select_atoms("segid MEMB and resid 3 and name P")
@@ -436,6 +436,7 @@ plt.show()
 # Trajectory Analysis
 
 There are different ways of iterating through the frames:
+
 1. Using implicit for loops:
   ```{python, engine.path = '/usr/bin/python3', eval=FALSE}
   data = np.array([(p.trajectory.time, theta(A,B,C)) for f in p.trajectory])
@@ -453,3 +454,67 @@ There are different ways of iterating through the frames:
     
   ```
 It starts from the 10th frame and goes to the 10th frame before the end with the increment of 2 frames. For trajectory indexing and slicing, MDAnalysis uses 0-based indices as in standard Python.
+
+
+# Writing coordinates
+
+- MDAnalysis can write data in different file formats including pdb, gro, xtc and dcd files. For a single frame, `write()` method of an *AtomGroup* works as follows:
+
+```{python, engine.path = '/usr/bin/python3', eval=FALSE}
+protein = p.select_atoms("protein")
+protein.write("protein.gro")
+```
+
+MDAnalysis uses the specified extension in the file name to determine the output file format. We can also specify the file format using *format* keyword. 
+
+- For multiple frames, we need to use a loop stepping through the input trajectory frame by frame. The coordinates in the given selection change accordingly and are written as the new frames into the specified output trajectory. If the file is written without using the `with` statement, we need to add another line to `close()`. 
+
+```{python, engine.path = '/usr/bin/python3', eval=FALSE}
+protein = p.select_atoms("protein")
+with MDAnalysis.Writer("protein.dcd", protein.n_atoms) as W:
+  for f in p.trajectory:
+    W.write(protein)
+protein.write("protein.pdb") #otherwise protein.dcd is useless
+```
+
+Note that *psf* has not been implemented as a file format yet.
+
+# Modules
+
+- MDAnalysis has a lot of analysis code in the `MDAnalysis.analysis` module. For the complete list, please visit <https://www.mdanalysis.org/docs/documentation_pages/analysis_modules.html>.
+
+- Let's calculate RMSD for our peptide. We will use *rmsd()* function from the *MDanalysis.analysis.rms* module. It calculated the root mean square distance between two sets of coordinates. 
+
+```{python, engine.path = '/usr/bin/python3'}
+import MDAnalysis.analysis.rms
+bb = p.select_atoms("backbone")
+frame1=bb.positions 
+p.trajectory[-1] #going to the last frame
+frame2=bb.positions
+print(MDAnalysis.analysis.rms.rmsd(frame1,frame2))
+```
+
+# Exercise
+
+- The following code aligns the trajectory onto its first frame:
+
+```{python, engine.path = '/usr/bin/python3'}
+from MDAnalysis.analysis import align
+reference=p
+alignment = align.AlignTraj(p,reference=reference,select="protein and name CA",filename="aligned.dcd")
+alignment.run()
+```
+
+
+# Exercise 
+
+The following code calculates the water density within 4 angstroms of protein atoms:
+
+```{python, engine.path = '/usr/bin/python3'}
+from MDAnalysis.analysis.density import density_from_Universe
+site_density = density_from_Universe(p, delta=1.0, atomselection='name OH2 and around 4.0 (protein and resid 418-439)', update_selection=True)
+site_density.convert_density('TIP3P')
+site_density.export("water.dx", type="double")
+```
+
+Note that the trajectory is already treated for periodic boundary artifacts and is suitable aligned onto a fixed reference frame. Initially the density is measured in angstrom^3, but then is converted to $g/cm^3$.  
